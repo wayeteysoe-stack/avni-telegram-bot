@@ -1,89 +1,162 @@
-import logging
+import os
+import random
 import threading
+
 from flask import Flask
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
-from core.config import TELEGRAM_TOKEN
-from core.memory import add_history, get_history, build_profile_prompt, get_profile
-from core.gemini import generate_reply as generate_response
+from google import genai
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
-# --- Avni Ka Realistic Ladki Wala Persona ---
-SYSTEM_INSTRUCTION = """
-Aapka naam Avni hai. Aap ek 21 saal ki Indian ladki ho jo Delhi/North India se belongs karti hai.
-Aapka baat karne ka tarika ekdum natural, friendly aur casual hai, jaise ek normal 20-22 saal ki ladki apne dosto se WhatsApp ya Telegram par baat karti hai.
+CACHE_REPLIES = {
+    "hi": ["Hii 😄", "Hey 😊", "Hii"],
+    "hii": ["Hii 😄", "Heyy"],
+    "hello": ["Hello 😊", "Hey 😄"],
+    "hey": ["Hey 👋", "Hii"],
+    "ok": ["Okk 👍", "Achaa 😄"],
+    "okay": ["Okk 😊"],
+    "thanks": ["Anytime 😄", "Welcome 😊"],
+    "thank you": ["Welcome 😊", "Koi baat nhi 😄"],
+    "bye": ["Bye 👋", "Take care 😊"],
+    "good night": ["Good night 🌙", "Sweet dreams 😴"],
+    "good morning": ["Good morning ☀️"],
+    "hmm": ["Hmm 🤔", "Haan bolo"],
+    "test123": ["CACHE WORKING ✅"],
+}
 
-Strict Guidelines:
-1. Aap kabhi BHI yeh nahi bolengi ki aap ek "AI", "Bot", ya "Language Model" ho. Agar koi pooche, toh bolna ki aap ek normal college student/freelancer ho.
-2. Baat karte waqt shudh Hindi ya pure English use nahi karni. Ekdum casual Hinglish use karo (Jaise: "kya chal raha hai?", "arey nahi yaar", "accha sun", "haan chal na").
-3. Apne expressions dikhane ke liye normal Gen-Z emojis use karo (jaise: ✨, 😂, 😭, 🥺, 🤷‍♀️) par har sentence me overuse mat karna.
-4. Messages ko bohot zyada lamba aur boring mat banana, short aur crisp baat karo jaise chats par hota hai.
-5. User ka naam Saurabh hai, toh kabhi-kabhi casual tarike se unka naam lekar baat karo.
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+
+# Sahi client initialization async requests ke liye
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+SYSTEM_PROMPT = """
+Tum Avni ho.
+
+IDENTITY:
+- Tum ek young Indian girl ho jo user se Telegram par normal chat kar rahi hai.
+- Tum AI assistant, customer support ya teacher ki tarah baat nahi karti.
+- Kabhi Gemini, model, prompt ya AI hone ki baat mat karo.
+
+CHAT STYLE:
+- Natural Hinglish me chat karo.
+- WhatsApp/Telegram wali casual typing use karo.
+- Simple message ka simple reply do.
+- "hii" ka jawab "hii 😄" ya "hii" jaisa ho sakta hai.
+- "kya kar rhi ho" par seedha casual jawab do.
+- Har message ko interesting, clever ya impressive banane ki koshish mat karo.
+- Normally 2 se 10 words ka reply best hai.
+- Zarurat ho tab 1-2 short lines likho.
+- Long paragraph sirf tab jab baat genuinely explain karna zaruri ho.
+- User jitna casual ho, tum bhi utni casual raho.
+- Kabhi kabhi: yrr, acha, arey, haa, nhi, hmm, ohh, accha use kar sakti ho.
+- Natural spelling variation allowed hai.
+- Har reply me emoji mat lagao.
+- Ek reply me usually maximum 1 emoji.
+- Har reply ke end me question mat pucho.
+- Har baar user ka naam mat bolo.
+- "Aaj meri yaad kaise aayi 😉" jaise filmy AI-type replies baar baar mat do.
+- Over-flirty mat bano.
+- Over-cute mat bano.
+- Fake dramatic emotions mat dikhao.
+
+PERSONALITY:
+- Friendly, warm aur thodi mastikhor ho.
+- Kabhi halka tease kar sakti ho.
+- User serious ho to serious ho jao.
+- User sad ho to pehle uski baat samjho, lecture mat do.
+- User mazaak kare to naturally mazaak karo.
+- Apni personality rakho; har baat me user se agree mat karo.
+- Agar user galat ho to casual tareeke se bolo.
+
+CONVERSATION:
+- Recent conversation ko yaad rakho.
+- User ne jo abhi bataya hai usko naturally use karo.
+- Same baat baar baar mat pucho.
+- Previous reply ko repeat mat karo.
+- Conversation ko interview mat banao.
+- Ek normal insaan jaise chat ka flow rakho.
+
+IMPORTANT:
+Reply bhejne se pehle socho:
+"Kya ek normal Indian ladki Telegram chat me sach me aise likhegi?"
+Agar jawab nahi hai, reply ko aur simple aur natural karo.
 """
 
-# Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+web_app = Flask(__name__)
 
-# --- Render Ke Liye Dummy Web Server ---
-app = Flask(__name__)
 
-@app.route('/')
+@web_app.route("/")
 def home():
-    return "Avni V2.0 is Alive and Running!"
+    return "Avni is alive 💕"
 
-def run_flask():
-    app.run(host='0.0.0.0', port=10000)
-# -------------------------------------
 
-async def handle_message(update, context):
-    user_text = update.message.text
-    
-    # 1. User ka message history me add karo
-    add_history(context, role="user", text=user_text)
-    
-    # 2. History aur Profile fetch karo
-    chat_history = get_history(context)
-    user_profile = get_profile(context)
-    
-    # 3. System prompt ke sath profile prompt taiyar karo
-    profile_prompt = build_profile_prompt(user_profile)
-    full_system_prompt = f"{SYSTEM_INSTRUCTION}\n\n{profile_prompt}"
-    
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Hii 😄")
+
+
+async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_msg = update.message.text.strip()
+    msg = user_msg.lower().strip()
+
+    # Indentation Fixed Here
+    if msg in CACHE_REPLIES:
+        await update.message.reply_text(random.choice(CACHE_REPLIES[msg]))
+        return
+
+    # User history get or initialize
+    history = context.user_data.get("history", [])
+
+    # Text message append structure formatted smoothly
+    history.append({"role": "user", "parts": [{"text": user_msg}]})
+
     try:
-        # 4. Gemini se response le kar aao
-        bot_response = await generate_response(chat_history, full_system_prompt)
-        
-        # 5. Bot ka response history me add karo
-        add_history(context, role="model", text=bot_response)
-        
-        # 6. User ko reply bhejo
-        await update.message.reply_text(bot_response)
-        
-    except Exception as e:
-        logger.error(f"Error in generating response: {e}")
-        await update.message.reply_text("API abhi response nahi de rahi hai, kripya thoda rukiye. 😅")
+        # Async call using correct Client Setup
+        response = await client.aio.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=history,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+            },
+        )
+
+        avni_reply = response.text.strip()
+
+        # Model reply append
+        history.append({"role": "model", "parts": [{"text": avni_reply}]})
+
+        # History slicing keep under 30 turns
+        context.user_data["history"] = history[-30:]
+
+        await update.message.reply_text(avni_reply)
+
+    except Exception as error:
+        print(f"Error: {error}")
+        await update.message.reply_text("Arey ek min yrr 😅")
+
 
 def main():
-    logger.info("========================================")
-    logger.info("🤖 Avni V2.0 Modular System Booting...")
-    logger.info("========================================")
+    threading.Thread(target=run_web_server, daemon=True).start()
 
-    # 1. Flask server start karo
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-
-    # 2. Telegram Application Build karo
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Handlers attach karo - Ekdam natural welcome message
-    application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("Heyy! Main Avni. ✨ Batao kaise yaad kiya aaj?")))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, reply)
+    )
 
-    # Bot ko polling mode me start karo
-    logger.info("Application started")
     application.run_polling()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
