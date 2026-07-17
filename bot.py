@@ -3,7 +3,8 @@ import threading
 from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from core.config import TELEGRAM_TOKEN
-from core.memory import handle_message
+from core.memory import add_history, get_history, build_profile_prompt, get_profile
+from core.gemini import generate_response
 
 # Logging setup
 logging.basicConfig(
@@ -20,16 +21,43 @@ def home():
     return "Avni V2.0 is Alive and Running!"
 
 def run_flask():
-    # Render default port 10000 use karta hai
     app.run(host='0.0.0.0', port=10000)
 # -------------------------------------
+
+# Yahan humne handle_message function bot.py ke andar hi bana diya
+async def handle_message(update, context):
+    user_text = update.message.text
+    
+    # 1. User ka message history me add karo
+    add_history(context, role="user", text=user_text)
+    
+    # 2. History aur Profile fetch karo
+    chat_history = get_history(context)
+    user_profile = get_profile(context)
+    
+    # 3. System prompt ke sath profile prompt taiyar karo
+    profile_prompt = build_profile_prompt(user_profile)
+    
+    try:
+        # 4. Gemini se response le kar aao
+        bot_response = await generate_response(chat_history, profile_prompt)
+        
+        # 5. Bot ka response history me add karo
+        add_history(context, role="model", text=bot_response)
+        
+        # 6. User ko reply bhejo
+        await update.message.reply_text(bot_response)
+        
+    except Exception as e:
+        logger.error(f"Error in generating response: {e}")
+        await update.message.reply_text("Sorry, abhi mere system me kuch dikkat aa rahi hai. Kripya thodi der baad prayas karein.")
 
 def main():
     logger.info("========================================")
     logger.info("🤖 Avni V2.0 Modular System Booting...")
     logger.info("========================================")
 
-    # 1. Flask server ko alag thread me start karo taaki Render ko open port mile
+    # 1. Flask server start karo (Render port binding ke liye)
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
