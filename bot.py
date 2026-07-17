@@ -65,7 +65,7 @@ def main():
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     # Handlers attach karo
-    application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("👋 Hello! Main Avni Bot hoon. Kaise madad karu aapki?")))
+    application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("Heyy! Main Avni. ✨ Batao kaise yaad kiya aaj?")))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Bot ko polling mode me start karo
