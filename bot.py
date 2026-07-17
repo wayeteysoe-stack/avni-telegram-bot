@@ -5,6 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from core.config import TELEGRAM_TOKEN
 from core.memory import add_history, get_history, build_profile_prompt, get_profile
 from core.gemini import generate_reply as generate_response
+from core.prompt import SYSTEM_INSTRUCTION  # <-- Yeh line missing thi, ab add kar di!
 
 # Logging setup
 logging.basicConfig(
@@ -24,7 +25,6 @@ def run_flask():
     app.run(host='0.0.0.0', port=10000)
 # -------------------------------------
 
-# Yahan humne handle_message function bot.py ke andar hi bana diya
 async def handle_message(update, context):
     user_text = update.message.text
     
@@ -51,21 +51,21 @@ async def handle_message(update, context):
         
     except Exception as e:
         logger.error(f"Error in generating response: {e}")
-        await update.message.reply_text("Sorry, abhi mere system me kuch dikkat aa rahi hai. Kripya thodi der baad prayas karein.")
+        await update.message.reply_text("API abhi response nahi de rahi hai, kripya thoda rukiye. 😅")
 
 def main():
     logger.info("========================================")
     logger.info("🤖 Avni V2.0 Modular System Booting...")
     logger.info("========================================")
 
-    # 1. Flask server start karo (Render port binding ke liye)
+    # 1. Flask server start karo
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     # 2. Telegram Application Build karo
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Handlers attach karo
+    # Handlers attach karo - Ekdam natural welcome message
     application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("Heyy! Main Avni. ✨ Batao kaise yaad kiya aaj?")))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
