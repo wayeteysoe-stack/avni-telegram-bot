@@ -4,7 +4,7 @@ from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from core.config import TELEGRAM_TOKEN
 from core.memory import add_history, get_history, build_profile_prompt, get_profile
-from core.gemini import generate_response
+from core.gemini import generate_reply as generate_response
 
 # Logging setup
 logging.basicConfig(
