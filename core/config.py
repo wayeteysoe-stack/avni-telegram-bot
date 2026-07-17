@@ -16,8 +16,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # ==========================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Free Plan Stable Model
-MODEL_NAME = "gemini-2.5-flash"
+# Purane model 'gemini-2.5-flash' ko hata kar latest standard model set karein
+MODEL_NAME = "gemini-2.0-flash"
 
 # ==========================
 # Memory
