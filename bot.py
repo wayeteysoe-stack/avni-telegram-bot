@@ -37,10 +37,11 @@ async def handle_message(update, context):
     
     # 3. System prompt ke sath profile prompt taiyar karo
     profile_prompt = build_profile_prompt(user_profile)
+    full_system_prompt = f"{SYSTEM_INSTRUCTION}\n\n{profile_prompt}"
     
     try:
         # 4. Gemini se response le kar aao
-        bot_response = await generate_response(chat_history, profile_prompt)
+        bot_response = await generate_response(chat_history, full_system_prompt)
         
         # 5. Bot ka response history me add karo
         add_history(context, role="model", text=bot_response)
