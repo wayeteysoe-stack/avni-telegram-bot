@@ -1,7 +1,7 @@
 import os
-from dotenv import load_dotenv  # 1. Yeh line add karo
+from dotenv import load_dotenv 
 
-load_dotenv()  # 2. Yeh line add karo
+load_dotenv() 
 
 import os
 
