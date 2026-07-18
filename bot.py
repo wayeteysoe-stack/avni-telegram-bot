@@ -9,6 +9,9 @@ from core.cache import get_cached_reply  # 🌟 Cache link kiya
 from core.extractors import extract_profile  # 🌟 Extractor link kiya
 from core.memory import add_history, get_history, build_profile_prompt, get_profile, update_profile
 
+# 🌟 LINE 8 FIXED: Correct alias mapping for Gemini router call
+from core.gemini import generate_reply as generate_response
+
 # Logging setup
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
