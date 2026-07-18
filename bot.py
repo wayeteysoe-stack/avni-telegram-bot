@@ -5,11 +5,9 @@ import json
 from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from core.config import TELEGRAM_TOKEN
-from core.cache import get_cached_reply  # 🌟 Cache link kiya
-from core.extractors import extract_profile  # 🌟 Extractor link kiya
+from core.cache import get_cached_reply  
+from core.extractors import extract_profile  
 from core.memory import add_history, get_history, build_profile_prompt, get_profile, update_profile
-
-# 🌟 LINE 8 FIXED: Correct alias mapping for Gemini router call
 from core.gemini import generate_reply as generate_response
 
 # Logging setup
@@ -57,7 +55,7 @@ Strict Guidelines:
     extracted_data = extract_profile(user_text)
     if extracted_data:
         logger.info(f"[EXTRACTOR ACTION]: Found new facts: {extracted_data}")
-        update_profile(context, extracted_data)  # Memory update triggered cleanly
+        update_profile(context, extracted_data)  
 
     # 1. Message save karo
     add_history(context, role="user", text=user_text)
@@ -74,12 +72,11 @@ Strict Guidelines:
     logger.info("---------- AVNI PIPELINE DEBUG ----------")
     logger.info(f"User Text: {user_text}")
     logger.info(f"Active Profile Data: {json.dumps(user_profile)}")
-    logger.info(f"Full System Prompt Length: {len(full_system_prompt)} chars")
     logger.info(f"Payload Context History Size: {len(chat_history)} items")
     logger.info("-----------------------------------------")
     
     try:
-        # 4. API Hit
+        # 4. API Hit (Thread Pool Execution)
         bot_response = await generate_response(chat_history, full_system_prompt)
         
         # 5. History update
