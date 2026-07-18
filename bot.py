@@ -1,4 +1,4 @@
-import os
+ek baar code check kar lo import os
 import random
 import threading
 
@@ -32,7 +32,7 @@ CACHE_REPLIES = {
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-# Sahi client initialization async requests ke liye
+# Client initialization for async requests
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_PROMPT = """
@@ -109,33 +109,71 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_msg = update.message.text.strip()
     msg = user_msg.lower().strip()
 
-    # Indentation Fixed Here
+    # 1. Cache Check
     if msg in CACHE_REPLIES:
         await update.message.reply_text(random.choice(CACHE_REPLIES[msg]))
         return
 
-    # User history get or initialize
+    # User history aur profile load ya initialize karein
     history = context.user_data.get("history", [])
+    profile = context.user_data.get("profile", {})
 
-    # Text message append structure formatted smoothly
+    # --- Profile Memory Extraction Logic ---
+    # Naam extract karne ke liye
+    if "mera naam" in msg or "my name" in msg:
+        words = user_msg.split()
+        if len(words) > 0:
+            profile["name"] = words[-1].strip(".,! ")
+
+    # Age extract karne ke liye
+    if "meri age" in msg or "i am" in msg or "umar" in msg:
+        age_words = [int(s) for s in msg.split() if s.isdigit()]
+        if age_words:
+            profile["age"] = age_words[0]
+
+    # Favourite Colour extract karne ke liye
+    if "favourite colour" in msg or "favourite color" in msg or "pasandida rang" in msg:
+        for color in ["blue", "red", "green", "black", "white", "yellow", "pink"]:
+            if color in msg:
+                profile["favorite_color"] = color
+
+    # Favourite Food extract karne ke liye
+    if "pizza" in msg or "burger" in msg or "pasta" in msg or "biryani" in msg:
+        for food in ["pizza", "burger", "pasta", "biryani", "momo"]:
+            if food in msg:
+                profile["favorite_food"] = food
+
+    # Updated profile ko save karein
+    context.user_data["profile"] = profile
+    # ---------------------------------------
+
+    # 2. Normal Message Flow
     history.append({"role": "user", "parts": [{"text": user_msg}]})
 
+    # Profile ke basis par dynamic instruction injection
+    profile_instruction = "\n\n[USER PROFILE MEMORY (Always Remember)]:\n"
+    if profile:
+        for key, value in profile.items():
+            profile_instruction += f"- {key}: {value}\n"
+    else:
+        profile_instruction += "- No facts known yet.\n"
+
+    DYNAMIC_SYSTEM_PROMPT = SYSTEM_PROMPT + profile_instruction
+
+    # 3. Gemini API Request Implementation
     try:
-        # Async call using correct Client Setup
         response = await client.aio.models.generate_content(
             model="gemini-3.5-flash",
             contents=history,
             config={
-                "system_instruction": SYSTEM_PROMPT,
+                "system_instruction": DYNAMIC_SYSTEM_PROMPT,
             },
         )
 
         avni_reply = response.text.strip()
 
-        # Model reply append
+        # Update and save the chat history cleanly
         history.append({"role": "model", "parts": [{"text": avni_reply}]})
-
-        # History slicing keep under 30 turns
         context.user_data["history"] = history[-30:]
 
         await update.message.reply_text(avni_reply)
