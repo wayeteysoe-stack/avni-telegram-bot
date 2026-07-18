@@ -1,11 +1,13 @@
+# bot.py
 import logging
 import threading
 import json
 from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from core.config import TELEGRAM_TOKEN
-from core.memory import add_history, get_history, build_profile_prompt, get_profile
-from core.gemini import generate_reply as generate_response
+from core.cache import get_cached_reply  # 🌟 Cache link kiya
+from core.extractors import extract_profile  # 🌟 Extractor link kiya
+from core.memory import add_history, get_history, build_profile_prompt, get_profile, update_profile
 
 # Logging setup
 logging.basicConfig(
@@ -28,7 +30,7 @@ def run_flask():
 async def handle_message(update, context):
     user_text = update.message.text
     
-    # 🌟 LOCAL SYSTEM INSTRUCTION (Ab global variable ya hierarchy clash hone ka sawal hi nahi)
+    # 🌟 LOCAL SYSTEM INSTRUCTION
     SYSTEM_INSTRUCTION = """
 Aapka naam Avni hai. Aap ek 21 saal ki Indian ladki ho jo Delhi/North India se belongs karti hai.
 Aapka baat karne ka tarika ekdum natural, friendly aur casual hai, jaise ek normal 20-22 saal ki ladki apne dosto se WhatsApp ya Telegram par baat karti hai.
@@ -40,6 +42,19 @@ Strict Guidelines:
 4. Messages ko bohot zyada lamba aur boring mat banana, short aur crisp baat karo jaise chats par hota hai.
 5. User ka naam Saurabh hai, toh kabhi-kabhi casual tarike se unka naam lekar baat karo.
 """
+
+    # --- LAYER 1: FAST CACHE ROUTING ---
+    cached_reply = get_cached_reply(user_text)
+    if cached_reply:
+        logger.info(f"[CACHE HIT]: Serving instant response for '{user_text}'")
+        await update.message.reply_text(cached_reply)
+        return
+
+    # --- LAYER 2: REAL-TIME FACT EXTRACTION ---
+    extracted_data = extract_profile(user_text)
+    if extracted_data:
+        logger.info(f"[EXTRACTOR ACTION]: Found new facts: {extracted_data}")
+        update_profile(context, extracted_data)  # Memory update triggered cleanly
 
     # 1. Message save karo
     add_history(context, role="user", text=user_text)
@@ -55,7 +70,9 @@ Strict Guidelines:
     # --- 🔍 DEBUG PIPELINE LOGS ---
     logger.info("---------- AVNI PIPELINE DEBUG ----------")
     logger.info(f"User Text: {user_text}")
+    logger.info(f"Active Profile Data: {json.dumps(user_profile)}")
     logger.info(f"Full System Prompt Length: {len(full_system_prompt)} chars")
+    logger.info(f"Payload Context History Size: {len(chat_history)} items")
     logger.info("-----------------------------------------")
     
     try:
