@@ -1,7 +1,8 @@
+# avni-bot/core/gemini.py
 import asyncio
 import logging
 from google import genai
-from google.genai import types  # Correct types validation include kiya
+from google.genai import types
 from core.config import (
     GEMINI_API_KEY,
     MODEL_NAME,
@@ -12,28 +13,41 @@ from core.config import (
 
 logger = logging.getLogger(__name__)
 
-# Initialize the new SDK Client structure smoothly
-client = genai.Client(api_key=GEMINI_API_KEY)
+# 🌟 FORCE V1 PRODUCTION API ENDPOINT (Bypasses the buggy v1beta 404 routing route completely)
+try:
+    client = genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options={"api_version": "v1"}
+    )
+except Exception as e:
+    logger.critical(f"Gemini Client Core Initialization Failed: {e}")
+    client = None
 
 async def generate_reply(history: list, system_instruction: str) -> str:
     """
-    Sends conversational object blocks cleanly to Gemini API using the latest SDK standards.
+    Latest SDK standards ke mutabik cleanly stable v1 endpoint par content generate karta hai.
     """
-    # System instruction ko proper types config class framework me convert kiya
+    if not client:
+        return "Internal Technical Error: AI core ready nahi hai. 🥺"
+
+    # System instruction ko valid types config framework me map kiya
     config = types.GenerateContentConfig(
-        system_instruction=system_instruction if system_instruction else None
+        system_instruction=system_instruction if system_instruction else None,
+        temperature=0.7,  # Human conversational warmth match karne ke liye
+        top_p=0.95
     )
 
-    # Clean Model Name parsing: Agar config me 'models/' pehle se laga hai toh use clean karo
-    clean_model_name = MODEL_NAME.replace("models/", "")
+    # Absolute Model name extraction logic
+    clean_model_name = MODEL_NAME.replace("models/", "").strip()
 
     for attempt in range(MAX_RETRIES):
         try:
-            # Modern direct async content generation call structure
-            logger.info(f"Hitting Gemini Endpoint with Model: {clean_model_name}")
+            logger.info(f"Targeting Clean Model Endpoint: {clean_model_name} (Attempt {attempt + 1})")
+            
+            # Direct non-blocking async payload dispatch pipeline
             response = await asyncio.wait_for(
                 client.aio.models.generate_content(
-                    model=clean_model_name,  # Strict clean string identifier
+                    model=clean_model_name,
                     contents=history,
                     config=config
                 ),
@@ -42,12 +56,11 @@ async def generate_reply(history: list, system_instruction: str) -> str:
 
             if response and response.text:
                 return response.text.strip()
-            return "Hmm... main samajh nahi paayi."
+            return "Hmm... main samajh nahi paayi. Dobara bolo? 🤷‍♀️"
 
         except Exception as e:
-            logger.error(f"[Gemini Error | Attempt {attempt + 1}]: {e}")
+            logger.error(f"[Gemini Core Engine Error | Attempt {attempt + 1}]: {e}")
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(RETRY_DELAY)
 
-    # Agar saare retries fail ho jayein toh error message (taaki hume pata chale fallback hua hai)
-    return "API abhi response nahi de rahi hai, kripya thoda rukiye. 😅"
+    return "API abhi response nahi de rahi hai, network slow hai shayad. Kripya thoda rukiye! 😅"
