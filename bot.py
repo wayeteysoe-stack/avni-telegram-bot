@@ -1,4 +1,4 @@
-ek baar code check kar lo import os
+import os
 import random
 import threading
 
