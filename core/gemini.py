@@ -24,12 +24,16 @@ async def generate_reply(history: list, system_instruction: str) -> str:
         system_instruction=system_instruction if system_instruction else None
     )
 
+    # Clean Model Name parsing: Agar config me 'models/' pehle se laga hai toh use clean karo
+    clean_model_name = MODEL_NAME.replace("models/", "")
+
     for attempt in range(MAX_RETRIES):
         try:
             # Modern direct async content generation call structure
+            logger.info(f"Hitting Gemini Endpoint with Model: {clean_model_name}")
             response = await asyncio.wait_for(
                 client.aio.models.generate_content(
-                    model=MODEL_NAME,
+                    model=clean_model_name,  # Strict clean string identifier
                     contents=history,
                     config=config
                 ),
