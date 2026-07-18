@@ -6,7 +6,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from core.config import TELEGRAM_TOKEN
 from core.memory import add_history, get_history, build_profile_prompt, get_profile
 from core.gemini import generate_reply as generate_response
-from core.prompt import SYSTEM_INSTRUCTION
 
 # Logging setup
 logging.basicConfig(
