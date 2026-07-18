@@ -1,78 +1,57 @@
 # avni-bot/core/gemini.py
-import asyncio
 import logging
+import concurrent.futures
 from google import genai
-from google.genai import types
-from core.config import (
-    GEMINI_API_KEY,
-    MODEL_NAME,
-    MAX_RETRIES,
-    RETRY_DELAY,
-    REQUEST_TIMEOUT,
-)
+from core.config import GEMINI_API_KEY, MODEL_NAME
 
 logger = logging.getLogger(__name__)
 
-# Force v1 production routing endpoint cleanly
+# Strict stable production initialization
 try:
-    client = genai.Client(
-        api_key=GEMINI_API_KEY,
-        http_options={"api_version": "v1"}
-    )
+    client = genai.Client(api_key=GEMINI_API_KEY)
 except Exception as e:
     logger.critical(f"Gemini Client Core Initialization Failed: {e}")
     client = None
 
-async def generate_reply(history: list, system_instruction: str) -> str:
+def generate_reply_sync(history: list, system_instruction: str) -> str:
     """
-    SDK payload constraints ko bypass karne ke liye system instructions ko 
-    content array me insert karke model standard par cleanly generate karta hai.
+    Synchronous function jo Google API ko smooth native configuration call bhejti hai.
     """
     if not client:
         return "Internal Technical Error: AI core ready nahi hai. 🥺"
 
-    # 🌟 NEW PIPELINE RESOLUTION: JSON payload map block crash se bachne ke liye 
-    # instructions ko safe content layer object banakar insert kiya.
-    payload_contents = []
-    
-    if system_instruction:
-        payload_contents.append({
-            "role": "system",
-            "parts": [{"text": system_instruction}]
-        })
-    
-    # Baaki bachi hui user/model history safe append karo
-    payload_contents.extend(history)
-
-    # Config se buggy system_instruction parameter bilkul hata diya (Bypasses 400 Error)
-    config = types.GenerateContentConfig(
-        temperature=0.7,
-        top_p=0.95
-    )
-
     clean_model_name = MODEL_NAME.replace("models/", "").strip()
+    
+    # Naye SDK ka direct configuration block jo v1 par safely execute hota hai
+    response = client.models.generate_content(
+        model=clean_model_name,
+        contents=history,
+        config={
+            "system_instruction": system_instruction if system_instruction else None,
+            "temperature": 0.7,
+            "top_p": 0.95
+        }
+    )
+    
+    if response and response.text:
+        return response.text.strip()
+    return "Hmm... main samajh nahi paayi. Dobara bolo? 🤷‍♀️"
 
-    for attempt in range(MAX_RETRIES):
-        try:
-            logger.info(f"Targeting Secure JSON Payload on Model: {clean_model_name} (Attempt {attempt + 1})")
-            
-            # Direct async layout invocation
-            response = await asyncio.wait_for(
-                client.aio.models.generate_content(
-                    model=clean_model_name,
-                    contents=payload_contents,  # Structured injected payload
-                    config=config
-                ),
-                timeout=REQUEST_TIMEOUT,
+async def generate_reply(history: list, system_instruction: str) -> str:
+    """
+    Main Async wrapper jo thread pool me sync method ko chala kar 
+    Telegram event loop ko crash hone se bachata hai.
+    """
+    import asyncio
+    loop = asyncio.get_running_loop()
+    
+    try:
+        # standard thread pool execute to bypass client.aio structural errors
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            bot_response = await loop.run_in_executor(
+                pool, generate_reply_sync, history, system_instruction
             )
-
-            if response and response.text:
-                return response.text.strip()
-            return "Hmm... main samajh nahi paayi. Dobara bolo? 🤷‍♀️"
-
-        except Exception as e:
-            logger.error(f"[Gemini Core Engine Error | Attempt {attempt + 1}]: {e}")
-            if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(RETRY_DELAY)
-
-    return "API abhi response nahi de rahi hai, network slow hai shayad. Kripya thoda rukiye! 😅"
+            return bot_response
+    except Exception as e:
+        logger.error(f"[Gemini Core Master Fix Error]: {e}")
+        return "API abhi response nahi de rahi hai, kripya thoda rukiye! 😅"
