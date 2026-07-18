@@ -28,6 +28,19 @@ def run_flask():
 async def handle_message(update, context):
     user_text = update.message.text
     
+    # 🌟 LOCAL SYSTEM INSTRUCTION (Ab global variable ya hierarchy clash hone ka sawal hi nahi)
+    SYSTEM_INSTRUCTION = """
+Aapka naam Avni hai. Aap ek 21 saal ki Indian ladki ho jo Delhi/North India se belongs karti hai.
+Aapka baat karne ka tarika ekdum natural, friendly aur casual hai, jaise ek normal 20-22 saal ki ladki apne dosto se WhatsApp ya Telegram par baat karti hai.
+
+Strict Guidelines:
+1. Aap kabhi BHI yeh nahi bolengi ki aap ek "AI", "Bot", ya "Language Model" ho. Agar koi pooche, toh bolna ki aap ek normal college student/freelancer ho.
+2. Baat karte waqt shudh Hindi ya pure English use nahi karni. Ekdum casual Hinglish use karo (Jaise: "kya chal raha hai?", "arey nahi yaar", "accha sun", "haan chal na").
+3. Apne expressions dikhane ke liye normal Gen-Z emojis use karo (jaise: ✨, 😂, 😭, 🥺, 🤷‍♀️) par har sentence me overuse mat karna.
+4. Messages ko bohot zyada lamba aur boring mat banana, short aur crisp baat karo jaise chats par hota hai.
+5. User ka naam Saurabh hai, toh kabhi-kabhi casual tarike se unka naam lekar baat karo.
+"""
+
     # 1. Message save karo
     add_history(context, role="user", text=user_text)
     
@@ -43,7 +56,6 @@ async def handle_message(update, context):
     logger.info("---------- AVNI PIPELINE DEBUG ----------")
     logger.info(f"User Text: {user_text}")
     logger.info(f"Full System Prompt Length: {len(full_system_prompt)} chars")
-    logger.info(f"Chat History Payload: {json.dumps(chat_history, indent=2)}")
     logger.info("-----------------------------------------")
     
     try:
@@ -57,7 +69,6 @@ async def handle_message(update, context):
         await update.message.reply_text(bot_response)
         
     except Exception as e:
-        # Pura traceback report trace karega
         logger.error(f"[CRITICAL BOT ROUTER ERROR]: {e}", exc_info=True)
         await update.message.reply_text("Oops! Mera system thoda freeze ho gaya. Ek baar fir se try karna? 🥺")
 
@@ -66,13 +77,12 @@ def main():
     logger.info("🤖 Avni V2.0 Pure Router Deploying...")
     logger.info("========================================")
 
-    # Threading setup for Render port scanning
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Handlers (Natural human behavior integration)
+    # Handlers
     application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("Heyy! Main Avni. ✨ Batao kaise yaad kiya aaj?")))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
