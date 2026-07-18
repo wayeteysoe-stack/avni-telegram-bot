@@ -13,7 +13,7 @@ from core.config import (
 
 logger = logging.getLogger(__name__)
 
-# 🌟 FORCE V1 PRODUCTION API ENDPOINT (Bypasses the buggy v1beta 404 routing route completely)
+# Force v1 production routing endpoint cleanly
 try:
     client = genai.Client(
         api_key=GEMINI_API_KEY,
@@ -25,30 +25,42 @@ except Exception as e:
 
 async def generate_reply(history: list, system_instruction: str) -> str:
     """
-    Latest SDK standards ke mutabik cleanly stable v1 endpoint par content generate karta hai.
+    SDK payload constraints ko bypass karne ke liye system instructions ko 
+    content array me insert karke model standard par cleanly generate karta hai.
     """
     if not client:
         return "Internal Technical Error: AI core ready nahi hai. 🥺"
 
-    # System instruction ko valid types config framework me map kiya
+    # 🌟 NEW PIPELINE RESOLUTION: JSON payload map block crash se bachne ke liye 
+    # instructions ko safe content layer object banakar insert kiya.
+    payload_contents = []
+    
+    if system_instruction:
+        payload_contents.append({
+            "role": "system",
+            "parts": [{"text": system_instruction}]
+        })
+    
+    # Baaki bachi hui user/model history safe append karo
+    payload_contents.extend(history)
+
+    # Config se buggy system_instruction parameter bilkul hata diya (Bypasses 400 Error)
     config = types.GenerateContentConfig(
-        system_instruction=system_instruction if system_instruction else None,
-        temperature=0.7,  # Human conversational warmth match karne ke liye
+        temperature=0.7,
         top_p=0.95
     )
 
-    # Absolute Model name extraction logic
     clean_model_name = MODEL_NAME.replace("models/", "").strip()
 
     for attempt in range(MAX_RETRIES):
         try:
-            logger.info(f"Targeting Clean Model Endpoint: {clean_model_name} (Attempt {attempt + 1})")
+            logger.info(f"Targeting Secure JSON Payload on Model: {clean_model_name} (Attempt {attempt + 1})")
             
-            # Direct non-blocking async payload dispatch pipeline
+            # Direct async layout invocation
             response = await asyncio.wait_for(
                 client.aio.models.generate_content(
                     model=clean_model_name,
-                    contents=history,
+                    contents=payload_contents,  # Structured injected payload
                     config=config
                 ),
                 timeout=REQUEST_TIMEOUT,
