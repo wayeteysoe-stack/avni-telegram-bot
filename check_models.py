@@ -1,9 +1,14 @@
 from google import genai
+import os
+from dotenv import load_dotenv
 
-client = genai.Client(api_key="AQ.Ab8RN6KtwOTo4-XBvEisgVxt_69rJ2HkHMV7Gk6wyMIkvrCe8A")
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
 try:
+    client = genai.Client(api_key=api_key)
+    print("Checking available models...")
     for model in client.models.list():
-        print(model.name)
+        print(f"-> {model.name}")
 except Exception as e:
-    print(e)
+    print(f"⚠️ Error: {e}")
