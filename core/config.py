@@ -5,7 +5,10 @@ load_dotenv()
 
 # API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Yahan TELEGRAM_TOKEN kar diya
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Bot Settings
+HISTORY_LIMIT = 20  # Memory module isko use karta hai
 
 # Model Config
 MODEL_NAME = "gemini-flash-latest"
