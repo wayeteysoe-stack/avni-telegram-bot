@@ -18,7 +18,7 @@ DYNAMIC_FALLBACKS = [
     "Wait, msg deliver nhi ho rha tha proper 🙈 dubara bolo?"
 ]
 
-def generate_avni_response(user_text: str, conversation_history: list = None) -> str:
+def generate_reply(user_text: str, conversation_history: list = None) -> str:
     """
     Generates Avni's response using the Gemini API.
     """
