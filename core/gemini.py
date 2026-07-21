@@ -18,12 +18,11 @@ DYNAMIC_FALLBACKS = [
     "Wait, msg deliver nhi ho rha tha proper 🙈 dubara bolo?"
 ]
 
-def generate_reply(user_text: str, conversation_history: list = None) -> str:
+async def generate_reply(user_text: str, conversation_history: list = None) -> str:
     """
-    Generates Avni's response using the Gemini API.
+    Async wrapper for generating Avni's response using the Gemini API.
     """
     try:
-        # Build contents from history + current text
         contents = []
         if conversation_history:
             for msg in conversation_history:
