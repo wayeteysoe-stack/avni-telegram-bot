@@ -1,38 +1,31 @@
+# avni-bot/core/cache.py
 import random
 
 CACHE_REPLIES = {
-    "hi": ["Hii 😄", "Hey 😊", "Hii"],
-    "hii": ["Hii 😄", "Heyy"],
-    "hello": ["Hello 😊", "Hey 😄"],
-    "hey": ["Hey 👋", "Hii"],
+    "hi": ["Hii", "Heyy", "Haan bolo"],
+    "hii": ["Hii", "Hey", "Haanji"],
+    "hello": ["Hello", "Hey", "Haanji bolo"],
+    "hey": ["Heyy", "Hii", "Haan bolo"],
 
-    "ok": ["Okk 👍", "Achaa 😄"],
-    "okay": ["Okk 😊"],
+    "ok": ["Achaa", "Okk", "Hmm"],
+    "okay": ["Achaa okk", "Hmm thik hai"],
 
-    "thanks": ["Anytime 😄", "Welcome 😊"],
-    "thank you": ["Welcome 😊", "Koi baat nhi 😄"],
+    "thanks": ["Arey koi na", "Mention not yaar", "Welcome"],
+    "thank you": ["Koi na yaar", "Welcome"],
 
-    "bye": ["Bye 👋", "Take care 😊"],
+    "bye": ["Bye", "Chalo bye", "Take care"],
 
-    "good night": ["Good night 🌙", "Sweet dreams 😴"],
-    "good morning": ["Good morning ☀️"],
+    "good night": ["Good night", "Gn! Kal baat karte hain"],
+    "good morning": ["Good morning", "Gm!"],
 
-    "hmm": ["Hmm 🤔", "Haan bolo"],
-
-    "test123": ["CACHE WORKING ✅"],
+    "hmm": ["Hmm", "Aage bolo", "Kahan khoye ho?"],
 }
-
 
 def get_cached_reply(message: str):
     """
-    Agar message cache me hai to
-    random reply return karega.
-    Nahi hai to None return karega.
+    Agar message cache me hai to natural random reply return karega.
     """
-
-    message = message.lower().strip()
-
-    if message in CACHE_REPLIES:
-        return random.choice(CACHE_REPLIES[message])
-
+    msg = message.lower().strip()
+    if msg in CACHE_REPLIES:
+        return random.choice(CACHE_REPLIES[msg])
     return None
