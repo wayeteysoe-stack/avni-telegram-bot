@@ -1,10 +1,19 @@
 # avni-bot/core/gemini.py
 import logging
+import random
 import concurrent.futures
 from google import genai
 from core.config import GEMINI_API_KEY, MODEL_NAME
 
 logger = logging.getLogger(__name__)
+
+# Organic Human Fallbacks Pool (jab API lag/fail ho)
+HUMAN_FALLBACKS = [
+    "Arey yaar mera net suddenly hag raha hai, ek min...",
+    "Acha ruko, yahan network thoda glitch kar raha hai.",
+    "Hmm... tumhara message adha hi aaya mere paas.",
+    "Ek sec ruko, signal drop ho gaya lagta hai."
+]
 
 # Strict stable production initialization
 try:
@@ -18,11 +27,11 @@ def generate_reply_sync(history: list, system_instruction: str) -> str:
     Synchronous function jo Google API ko smooth native configuration call bhejti hai.
     """
     if not client:
-        return "Internal Technical Error: AI core ready nahi hai. 🥺"
+        return random.choice(HUMAN_FALLBACKS)
 
     clean_model_name = MODEL_NAME.replace("models/", "").strip()
     
-    # Naye SDK ka direct configuration block jo v1 par safely execute hota hai
+    # Naye SDK ka direct configuration block
     response = client.models.generate_content(
         model=clean_model_name,
         contents=history,
@@ -35,7 +44,8 @@ def generate_reply_sync(history: list, system_instruction: str) -> str:
     
     if response and response.text:
         return response.text.strip()
-    return "Hmm... main samajh nahi paayi. Dobara bolo? 🤷‍♀️"
+    
+    return random.choice(HUMAN_FALLBACKS)
 
 async def generate_reply(history: list, system_instruction: str) -> str:
     """
@@ -46,7 +56,6 @@ async def generate_reply(history: list, system_instruction: str) -> str:
     loop = asyncio.get_running_loop()
     
     try:
-        # standard thread pool execute to bypass client.aio structural errors
         with concurrent.futures.ThreadPoolExecutor() as pool:
             bot_response = await loop.run_in_executor(
                 pool, generate_reply_sync, history, system_instruction
@@ -54,4 +63,4 @@ async def generate_reply(history: list, system_instruction: str) -> str:
             return bot_response
     except Exception as e:
         logger.error(f"[Gemini Core Master Fix Error]: {e}")
-        return "API abhi response nahi de rahi hai, kripya thoda rukiye! 😅"
+        return random.choice(HUMAN_FALLBACKS)

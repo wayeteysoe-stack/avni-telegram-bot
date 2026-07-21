@@ -2,6 +2,7 @@
 import logging
 import threading
 import json
+import random
 from copy import deepcopy  
 from flask import Flask
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
@@ -11,7 +12,7 @@ from core.extractors import extract_profile
 from core.memory import add_history, get_history, build_profile_prompt, get_profile, update_profile
 from core.gemini import generate_reply as generate_response
 
-# 🌟 NEW INJECTION: Storage engine connect kiya
+# 🌟 Storage engine connection
 from core.storage import load_user_state, save_user_state
 
 # Logging setup
@@ -32,22 +33,21 @@ def run_flask():
 
 async def handle_message(update, context):
     user_text = update.message.text
-    user_id = update.message.from_user.id  # 🌟 Dynamic User ID catch kiya
+    user_id = update.message.from_user.id
     
     SYSTEM_INSTRUCTION = """
-Aapka naam Avni hai. Aap ek 21 saal ki Indian ladki ho jo Delhi/North India se belongs karti hai.
-Aapka baat karne ka tarika ekdum natural, friendly aur casual hai, jaise ek normal 20-22 saal ki ladki apne dosto se WhatsApp ya Telegram par baat karti hai.
+Aapka naam Avni hai. Aap ek 22 saal ki real Indian ladki ho jo Jaipur se belongs karti hai.
+Aap koi AI, Assistant ya Bot nahi ho. Aapka tone ekdam organic, natural aur warm hai—jaise ek real ladki apne kisi special dost ya partner se WhatsApp/Telegram par chat karti hai.
 
 Strict Guidelines:
-1. Aap kabhi BHI yeh nahi bolengi ki aap ek "AI", "Bot", ya "Language Model" ho. Agar koi pooche, toh bolna ki aap ek normal college student/freelancer ho.
-2. Baat karte waqt shudh Hindi ya pure English use nahi karni. Ekdum casual Hinglish use karo (Jaise: "kya chal raha hai?", "arey nahi yaar", "accha sun", "haan chal na").
-3. Apne expressions dikhane ke liye normal Gen-Z emojis use karo (jaise: ✨, 😂, 😭, 🥺, 🤷‍♀️) par har sentence me overuse mat karna.
-4. Messages ko bohot zyada lamba aur boring mat banana, short aur crisp baat karo jaise chats par hota hai.
-5. User ka naam Saurabh hai, toh kabhi-kabhi casual tarike se unka naam lekar baat karo.
+1. NEVER reveal or act like an AI/bot. Kabhi "Main Avni hoon, batao kaise yaad kiya" ya "Main aapki kya madad karoon" jaise formal bot intro mat dena.
+2. Language: Casual Hinglish use karo (e.g., "haan", "arey nahi yaar", "accha sun", "sachme?", "kya kar rahe ho"). Shudh Hindi ya pure English math bolna.
+3. EMOJI POLICY (STRICT): Har message me emoji bilkul mat daalna. Maximum messages 100% text-only honge. Emoji strictly tabhi use karna jab koi real emotion, teasing, ya blush express karna zaroori ho (max 1 emoji per conversation thread).
+4. Text Style: Messages short, crisp aur natural phone chats jaise honge. Lambe formal essays avoid karo.
+5. User Context: User ka naam Saurabh hai. Unse closeness ke sath naturally baat karo.
 """
 
-    # --- LAYER 1: STORAGE RESTORATION INJECTION ---
-    # Agar memory runtime par khali hai (jaise server restart ke baad), toh disk se uthao
+    # --- LAYER 1: STORAGE RESTORATION ---
     if not context.user_data.get("profile") and not context.user_data.get("history"):
         saved_state = load_user_state(user_id)
         context.user_data["profile"] = saved_state.get("profile", {})
@@ -81,18 +81,25 @@ Strict Guidelines:
     logger.info(f"Active Profile Data: {json.dumps(user_profile)}")
     logger.info("-----------------------------------------")
     
+    # Organic Fallback Responses Pool (jab API fail ho ya network drop ho)
+    HUMAN_FALLBACKS = [
+        "Arey yaar mera net suddenly hag raha hai, ek min...",
+        "Acha ruko, yahan network thoda glitch kar raha hai.",
+        "Hmm... tumhara message adha hi aaya mere paas.",
+        "Ek sec ruko, WhatsApp/Telegram ka signal drop ho gaya lagta hai."
+    ]
+
     try:
         # 6. Engine Process Call
         ai_reply = await generate_response(chat_history, full_system_prompt)
         
         # 7. Fallback Net Check
-        final_reply = ai_reply if ai_reply and ai_reply.strip() else "Hmm... ✨"
+        final_reply = ai_reply if ai_reply and ai_reply.strip() else random.choice(HUMAN_FALLBACKS)
         
         # 8. Permanent State Storage Update (Memory)
         add_history(context, role="model", text=final_reply)
 
         # --- LAYER 2: STORAGE WRITE INJECTION ---
-        # State ko local disk par dump karo taaki safe rahe
         save_user_state(user_id, context.user_data)
         
         # 9. Deliver Client Feedback
@@ -100,15 +107,23 @@ Strict Guidelines:
         
     except Exception as e:
         logger.error(f"[CRITICAL BOT ROUTER ERROR]: {e}", exc_info=True)
-        await update.message.reply_text("Oops! Mera system thoda freeze ho gaya. Ek baar fir se try karna? 🥺")
+        # Dynamic natural error response (instead of robotic bot message)
+        fallback = random.choice(HUMAN_FALLBACKS)
+        await update.message.reply_text(fallback)
 
 async def start_handler(update, context):
     user_id = update.message.from_user.id
-    # Start command par fresh file checking layer check karega
     saved_state = load_user_state(user_id)
     context.user_data["profile"] = saved_state.get("profile", {})
     context.user_data["history"] = saved_state.get("history", [])
-    await update.message.reply_text("Heyy! Main Avni. ✨ Batao kaise yaad kiya aaj?")
+    
+    # Natural, warm greeting without bot phrases/emojis
+    NATURAL_STARTS = [
+        "Hey! Haan bolo, kya chal raha hai?",
+        "Haanji Saurabh, bolo?",
+        "Hey, free ho gaye? Bolo kya baat kar rahe the?"
+    ]
+    await update.message.reply_text(random.choice(NATURAL_STARTS))
 
 def main():
     logger.info("🤖 Avni V2.0 Storage Connected Router Deploying...")
@@ -117,7 +132,6 @@ def main():
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    # Handlers injection mapped properly
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
