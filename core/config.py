@@ -5,7 +5,7 @@ load_dotenv()
 
 # API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Yahan TELEGRAM_TOKEN kar diya
 
 # Model Config
 MODEL_NAME = "gemini-flash-latest"
