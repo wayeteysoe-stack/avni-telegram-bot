@@ -20,19 +20,52 @@ DYNAMIC_FALLBACKS = [
 
 async def generate_reply(user_text: str, conversation_history: list = None) -> str:
     """
-    Async wrapper for generating Avni's response using the Gemini API.
+    Async wrapper for generating Avni's response using proper Google GenAI Types.
     """
     try:
-        contents = []
+        formatted_contents = []
+
+        # Convert raw history items into proper google.genai Content objects
         if conversation_history:
-            for msg in conversation_history:
-                contents.append(msg)
-        
-        contents.append(user_text)
+            for item in conversation_history:
+                if isinstance(item, dict):
+                    role = item.get("role", "user")
+                    # Handle parts inside dictionary
+                    parts_raw = item.get("parts", [])
+                    text_parts = []
+                    for p in parts_raw:
+                        if isinstance(p, dict):
+                            text_parts.append(p.get("text", ""))
+                        elif isinstance(p, str):
+                            text_parts.append(p)
+                    
+                    text_content = " ".join(text_parts) if text_parts else ""
+                    if text_content.strip():
+                        formatted_contents.append(
+                            types.Content(
+                                role=role,
+                                parts=[types.Part.from_text(text=text_content)]
+                            )
+                        )
+                elif isinstance(item, str) and item.strip():
+                    formatted_contents.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(text=item)]
+                        )
+                    )
+
+        # Add current user prompt
+        formatted_contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_text)]
+            )
+        )
 
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=contents,
+            contents=formatted_contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.85,
