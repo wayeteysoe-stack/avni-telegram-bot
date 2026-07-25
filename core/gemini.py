@@ -18,40 +18,45 @@ DYNAMIC_FALLBACKS = [
     "Wait, msg deliver nhi ho rha tha proper 🙈 dubara bolo?"
 ]
 
+def _extract_text_strictly(raw_data) -> str:
+    """Helper function to convert any nested structure safely to string."""
+    if isinstance(raw_data, str):
+        return raw_data
+    if isinstance(raw_data, dict):
+        if "text" in raw_data:
+            return _extract_text_strictly(raw_data["text"])
+        if "parts" in raw_data:
+            return _extract_text_strictly(raw_data["parts"])
+    if isinstance(raw_data, list):
+        extracted = [_extract_text_strictly(item) for item in raw_data]
+        return " ".join([e for e in extracted if e])
+    return str(raw_data) if raw_data is not None else ""
+
 async def generate_reply(user_text: str, conversation_history: list = None) -> str:
     """
-    Async wrapper for generating Avni's response using proper Google GenAI Types.
+    Async wrapper for generating Avni's response with strict string validation.
     """
     try:
         formatted_contents = []
 
-        # Convert raw history items into proper google.genai Content objects
+        # Convert raw history items into strictly validated google.genai Content objects
         if conversation_history:
             for item in conversation_history:
                 if isinstance(item, dict):
                     role = item.get("role", "user")
-                    # Handle parts inside dictionary
-                    parts_raw = item.get("parts", [])
-                    text_parts = []
-                    for p in parts_raw:
-                        if isinstance(p, dict):
-                            text_parts.append(p.get("text", ""))
-                        elif isinstance(p, str):
-                            text_parts.append(p)
-                    
-                    text_content = " ".join(text_parts) if text_parts else ""
-                    if text_content.strip():
+                    clean_text = _extract_text_strictly(item.get("parts", ""))
+                    if clean_text.strip():
                         formatted_contents.append(
                             types.Content(
                                 role=role,
-                                parts=[types.Part.from_text(text=text_content)]
+                                parts=[types.Part.from_text(text=clean_text.strip())]
                             )
                         )
                 elif isinstance(item, str) and item.strip():
                     formatted_contents.append(
                         types.Content(
                             role="user",
-                            parts=[types.Part.from_text(text=item)]
+                            parts=[types.Part.from_text(text=item.strip())]
                         )
                     )
 
@@ -59,7 +64,7 @@ async def generate_reply(user_text: str, conversation_history: list = None) -> s
         formatted_contents.append(
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=user_text)]
+                parts=[types.Part.from_text(text=str(user_text).strip())]
             )
         )
 
