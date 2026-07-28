@@ -1,3 +1,35 @@
+import os
+import time
+import threading
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Aapka exact Render URL
+RENDER_EXTERNAL_URL = "https://avni-telegram-bot.onrender.com"
+
+def keep_alive_ping():
+    # Bot start hone ke 30 sec baad pehla ping bhejega
+    time.sleep(30)
+    logger.info(f"[SELF-PING]: Background ping service initialized for {RENDER_EXTERNAL_URL}")
+    
+    while True:
+        try:
+            response = requests.get(RENDER_EXTERNAL_URL, timeout=10)
+            if response.status_code == 200:
+                logger.info("[SELF-PING SUCCESS]: Server kept awake 24/7!")
+        except Exception as e:
+            logger.error(f"[SELF-PING ERROR]: {e}")
+        
+        # Har 10 minute (600 seconds) mein khud ko hit karega
+        time.sleep(600)
+
+# Background thread ko auto-start karna
+ping_thread = threading.Thread(target=keep_alive_ping, daemon=True)
+ping_thread.start()
+
+
 # bot.py
 import logging
 import threading
