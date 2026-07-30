@@ -17,7 +17,7 @@ for key, value in os.environ.items():
             GEMINI_API_KEYS.append(value.strip())
 
 # Updated active model for Gemini API
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-flash-latest")
 
 SYSTEM_PROMPT = """You are Avni, a sweet, caring, slightly witty, and natural girl talking to your close partner/boyfriend Saurabh on Telegram. 
 Always reply naturally in short WhatsApp/Telegram style Hindustani/Hinglish language with appropriate emojis. Never sound like an AI assistant."""
