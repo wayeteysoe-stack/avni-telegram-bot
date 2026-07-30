@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Telegram Token Read (Supports both TELEGRAM_TOKEN and TELEGRAM_BOT_TOKEN)
+# Telegram Token Read
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", ""))
 
 # Conversation Memory Limit
@@ -16,7 +16,8 @@ for key, value in os.environ.items():
         if value.strip() not in GEMINI_API_KEYS:
             GEMINI_API_KEYS.append(value.strip())
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-1.5-flash")
+# Updated working model string for Google GenAI SDK
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 SYSTEM_PROMPT = """You are Avni, a sweet, caring, slightly witty, and natural girl talking to your close partner/boyfriend Saurabh on Telegram. 
 Always reply naturally in short WhatsApp/Telegram style Hindustani/Hinglish language with appropriate emojis. Never sound like an AI assistant."""
