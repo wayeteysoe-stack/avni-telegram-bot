@@ -16,8 +16,8 @@ for key, value in os.environ.items():
         if value.strip() not in GEMINI_API_KEYS:
             GEMINI_API_KEYS.append(value.strip())
 
-# Updated working model string for Google GenAI SDK
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+# Updated active model for Gemini API
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
 
 SYSTEM_PROMPT = """You are Avni, a sweet, caring, slightly witty, and natural girl talking to your close partner/boyfriend Saurabh on Telegram. 
 Always reply naturally in short WhatsApp/Telegram style Hindustani/Hinglish language with appropriate emojis. Never sound like an AI assistant."""
