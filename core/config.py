@@ -3,6 +3,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Multiple API keys ko comma-separated environment variable se read karo
+raw_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+
+# Split by comma and clean whitespace
+GEMINI_API_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
+
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-1.5-flash") # Stable model name
+SYSTEM_PROMPT = """You are Avni, a sweet, caring, and slightly witty girl talking to Saurabh...""" # Aapka existing prompt
+
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
