@@ -3,12 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Telegram Token Read (Fallback to TELEGRAM_BOT_TOKEN if TELEGRAM_TOKEN not found)
+# Telegram Token Read (Supports both TELEGRAM_TOKEN and TELEGRAM_BOT_TOKEN)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", ""))
 
-# System automatically scans all environment variables starting with 'GEMINI_API_KEY'
-GEMINI_API_KEYS = []
+# Conversation Memory Limit
+HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", 20))
 
+# Automatically scan all environment variables starting with 'GEMINI_API_KEY'
+GEMINI_API_KEYS = []
 for key, value in os.environ.items():
     if key.startswith("GEMINI_API_KEY") and value and value.strip():
         if value.strip() not in GEMINI_API_KEYS:
