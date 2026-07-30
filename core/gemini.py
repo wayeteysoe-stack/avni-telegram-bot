@@ -6,7 +6,6 @@ from core.config import GEMINI_API_KEYS, MODEL_NAME, SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-# Fallback messages
 DYNAMIC_FALLBACKS = [
     "Arey mera internet thoda hagne laga hai 🤦‍♀️ ek sec...",
     "Acha ek min ruko, wifi issue de raha hai mera.",
@@ -29,14 +28,11 @@ def _extract_text_strictly(raw_data) -> str:
     return str(raw_data) if raw_data is not None else ""
 
 async def generate_reply(user_text: str, conversation_history: list = None) -> str:
-    """
-    Tries generating content across multiple API keys until one succeeds.
-    """
     if not GEMINI_API_KEYS:
-        logger.error("[Gemini Core Error]: No API keys provided in configuration.")
+        logger.error("[Gemini Error]: No API keys available in environment!")
         return random.choice(DYNAMIC_FALLBACKS)
 
-    # Format conversation history
+    # Format memory/history
     formatted_contents = []
     if conversation_history:
         for item in conversation_history:
@@ -51,7 +47,7 @@ async def generate_reply(user_text: str, conversation_history: list = None) -> s
                         )
                     )
 
-    # Add latest user prompt
+    # Add current user text
     formatted_contents.append(
         types.Content(
             role="user",
@@ -59,7 +55,7 @@ async def generate_reply(user_text: str, conversation_history: list = None) -> s
         )
     )
 
-    # Loop through all available API Keys (Rotation)
+    # Loop through available API Keys (Rotation on failure)
     for index, api_key in enumerate(GEMINI_API_KEYS):
         try:
             client = genai.Client(api_key=api_key)
@@ -77,14 +73,13 @@ async def generate_reply(user_text: str, conversation_history: list = None) -> s
 
         except Exception as e:
             err_str = str(e)
-            logger.warning(f"[API Key {index+1} Failed]: {err_str}")
+            logger.warning(f"[API Key #{index+1} Hit Error]: {err_str}")
             
-            # If rate limited (429), loop automatically moves to the next key!
+            # Agar 429 quota error aaye, to silently agli key par switch ho jao
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                logger.info(f"Switching from Key #{index+1} to next available key...")
+                logger.info(f"Key #{index+1} quota exhausted. Rotating to next key...")
                 continue
             
-            # For other errors on last key
             if index == len(GEMINI_API_KEYS) - 1:
                 return random.choice(DYNAMIC_FALLBACKS)
 
