@@ -42,7 +42,7 @@ from core.config import TELEGRAM_TOKEN
 from core.cache import get_cached_reply  
 from core.extractors import extract_profile  
 from core.memory import add_history, get_history, build_profile_prompt, get_profile, update_profile
-from core.gemini import generate_reply as generate_response
+from core.gemini_service import generate_reply as generate_response
 
 # 🌟 Storage engine connection
 from core.storage import load_user_state, save_user_state
