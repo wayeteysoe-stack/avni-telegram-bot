@@ -22,14 +22,27 @@ FALLBACK_RESPONSES = [
     "Arey net slow ho gaya ekdam se, kya bola tumne?"
 ]
 
-async def generate_reply(user_text: str, conversation_history: List[Dict[str, Any]] = None) -> str:
+# FIX: Pure synchronous function for thread executor (NO async keyword)
+def _call_gemini_sync(client, model_name, contents, system_instruction):
+    """Executes the synchronous GenAI SDK call inside a separate thread."""
+    return client.models.generate_content(
+        model=model_name,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.85,
+        )
+    )
+
+async def generate_reply_with_context(contents: list, system_instruction: str) -> str:
+    """
+    Primary non-blocking async interface for Phase 2.
+    """
     active_clients = client_pool.get_active_clients()
 
     if not active_clients:
         logger.error("[GEMINI SERVICE]: Zero valid API clients available in pool.")
         return random.choice(FALLBACK_RESPONSES)
-
-    contents = build_gemini_contents(user_text, conversation_history)
 
     for client_info in active_clients:
         var_name = client_info["var_name"]
@@ -41,15 +54,11 @@ async def generate_reply(user_text: str, conversation_history: List[Dict[str, An
             logger.error(f"[GEMINI SERVICE]: Could not resolve model for {var_name}: {e}")
             continue
 
-        for attempt in range(1, 3):  # Max 2 attempts per key
+        for attempt in range(1, 3):
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.85,
-                    )
+                # Thread executor running synchronous SDK call
+                response = await asyncio.to_thread(
+                    _call_gemini_sync, client, model_name, contents, system_instruction
                 )
 
                 if response and response.text:
@@ -59,26 +68,29 @@ async def generate_reply(user_text: str, conversation_history: List[Dict[str, An
                 err_msg = str(e).lower()
                 logger.warning(f"[GEMINI SERVICE]: Key {var_name} (Attempt {attempt}) Error: {e}")
 
-                # Quota Exhausted -> Move to next key immediately
                 if "429" in err_msg or "resource_exhausted" in err_msg:
                     logger.info(f"[GEMINI SERVICE]: Key {var_name} quota hit. Rotating to next key...")
                     break
 
-                # Target specific model not found error before invalidating cache
                 if "not_found" in err_msg and ("model" in err_msg or "models/" in err_msg):
-                    logger.warning(f"[GEMINI SERVICE]: Specific Model NotFound error detected. Invalidating cache...")
+                    logger.warning(f"[GEMINI SERVICE]: Model NotFound detected. Invalidating cache...")
                     model_manager.invalidate_cache()
                     try:
                         model_name = model_manager.get_compatible_model(client)
                     except Exception:
                         break
 
-                # Transient server errors -> Exponential Backoff
                 if any(err in err_msg for err in TRANSIENT_ERRORS):
                     await asyncio.sleep(attempt * 1.5)
                     continue
 
-                break  # Non-retriable error on this key
+                break
 
     logger.error("[GEMINI SERVICE]: All valid keys exhausted or attempts failed.")
     return random.choice(FALLBACK_RESPONSES)
+
+
+async def generate_reply(user_text: str, conversation_history: List[Dict[str, Any]] = None) -> str:
+    """Backward compatibility fallback wrapper."""
+    contents = build_gemini_contents(user_text, conversation_history)
+    return await generate_reply_with_context(contents, SYSTEM_PROMPT)
