@@ -30,9 +30,9 @@ class GeminiClientPool:
 
             try:
                 client = genai.Client(api_key=key_val)
-                # Active validation: Actual token counting call to verify API key authorization
+                # Token count validation on active gemini-flash-latest model
                 client.models.count_tokens(
-                    model="gemini-1.5-flash", 
+                    model="gemini-flash-latest", 
                     contents=[types.Content(role="user", parts=[types.Part.from_text(text="ping")])]
                 )
                 
@@ -43,7 +43,7 @@ class GeminiClientPool:
                 })
                 logger.info(f"[CLIENT POOL]: Successfully validated key via active API ping: {var_name}")
             except Exception as e:
-                logger.error(f"[CLIENT POOL ERROR]: Active API Key validation failed for {var_name}: {e}")
+                logger.error(f"[CLIENT POOL ERROR]: Key validation failed for {var_name}: {e}")
 
     def get_active_clients(self) -> List[Dict[str, Any]]:
         return self.clients

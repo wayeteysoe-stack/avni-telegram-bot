@@ -9,7 +9,8 @@ class ModelManager:
     """
     Thread-safe manager for detecting and managing active compatible models dynamically.
     """
-    PREFERRED_TIERS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    # Active tested working model set as top priority
+    PREFERRED_TIERS = ["gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]
 
     def __init__(self):
         self._cached_model: Optional[str] = None
@@ -31,21 +32,21 @@ class ModelManager:
             if not compatible_names:
                 raise ModelSelectionError("No models supporting 'generateContent' were found in API response.")
 
-            # 1. Match preferred tiers
+            # Match preferred tier starting with gemini-flash-latest
             for pref in self.PREFERRED_TIERS:
                 if pref in compatible_names:
                     self._cached_model = pref
                     logger.info(f"[MODEL MANAGER]: Selected preferred model '{pref}'")
                     return self._cached_model
 
-            # 2. Dynamic fallback: Pick the first actual compatible model returned by API
             self._cached_model = compatible_names[0]
-            logger.info(f"[MODEL MANAGER]: Selected first available compatible model '{self._cached_model}'")
+            logger.info(f"[MODEL MANAGER]: Selected first available model '{self._cached_model}'")
             return self._cached_model
 
         except Exception as e:
-            logger.error(f"[MODEL MANAGER ERROR]: Dynamic model detection failed: {e}")
-            raise ModelSelectionError(f"Failed to query compatible models from API: {e}")
+            logger.warning(f"[MODEL MANAGER]: API scan fallback to active default 'gemini-flash-latest': {e}")
+            self._cached_model = "gemini-flash-latest"
+            return self._cached_model
 
     def invalidate_cache(self):
         self._cached_model = None
