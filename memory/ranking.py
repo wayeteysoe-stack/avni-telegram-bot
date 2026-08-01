@@ -1,110 +1,119 @@
 import re
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-# Strict Question Words: Agar sentence mein inme se koi word hai, toh Fact Extractor use REJECT kar dega
-QUESTION_WORDS = {
-    "kya", "kab", "kahan", "kaise", "kyun", "kon", "konsa", "konsi", "kis",
-    "what", "when", "where", "why", "who", "which", "how"
-}
+# --- STAGE 1: INTENT CLASSIFICATION (Question vs Statement) ---
 
-# Generic Noise words to strip from values
-NOISE_WORDS = {"bahut", "bohot", "bhut", "bhi", "hi", "toh", "to", "batao", "batayein", "pata"}
+# Strict Question Words (Enclosed in word boundaries \b to avoid sub-word matching like 'kisaan')
+QUESTION_WORDS_REGEX = r"\b(?:kya|kab|kahan|kaise|kyun|kon|konsa|konsi|kis|what|when|where|why|who|which|how)\b"
 
-# Pre-defined Lists for High-Accuracy Strict Matching
-KNOWN_COLORS = ["blue", "black", "red", "green", "white", "yellow", "pink", "purple", "orange", "grey", "gray"]
-KNOWN_DRINKS = ["cold coffee", "coffee", "tea", "chai", "green tea", "latte", "cappuccino", "juice", "beer", "wine"]
-
-FACT_PATTERNS = [
-    # 1. Birthday Pattern (Strict date/month capture)
-    (r"(?:mera\s+)?birthday\s+(?:kab\s+aata\s+hai|hai)?\s*([0-9]{1,2}(?:\s+[a-zA-Z]+|\/[0-9]{1,2}|-[0-9]{1,2}))", "birthday", "profile", 100),
-
-    # 2. Specific Preferences - Drinks
-    (r"(?:mujhe|meri)\s+(?:favourite|favorite|pasand)\s+(?:drink|coffee|tea|chai)\s+([a-zA-Z\s]+?)(?:\s+bahut|\s+bohot|\s+hai|\.|$)", "favorite_drink", "preference", 90),
-    (r"([a-zA-Z\s]+)\s+(?:bohot\s+|bahut\s+)?pasand\s+hai", "favorite_drink", "preference", 80),
-
-    # 3. Specific Preferences - Colors
-    (r"(?:mera|meri)\s+(?:favourite|favorite)\s+(?:color|colour|rang)\s+([a-zA-Z]+)", "favorite_color", "preference", 90),
-
-    # 4. Work/Profession (Only matches affirmative statements like "Main X me kaam karta hoon")
-    (r"(?:main|me)\s+([a-zA-Z\s]+?)\s+(?:me\s+)?(?:kaam|job|work)\s+(?:karta|karti)\s+hoon", "profession", "profile", 90),
-
-    # 5. Names
-    (r"mera\s+naam\s+([a-zA-Z]+)\s+hai", "user_name", "profile", 95),
-]
-
-def _is_question(text: str) -> bool:
-    """Checks if the sentence is a question to avoid saving questions as facts."""
+def _is_question_intent(text: str) -> bool:
+    """Classifies whether the user input is a question/query."""
     clean = text.lower().strip()
+    
+    # Direct Question Mark
     if "?" in clean:
         return True
-    words = set(re.findall(r'\b\w+\b', clean))
-    return bool(words & QUESTION_WORDS)
+        
+    # Interrogative Word Pattern Match
+    if re.search(QUESTION_WORDS_REGEX, clean):
+        return True
+        
+    return False
 
-def _clean_value(val: str) -> str:
-    """Strips noise words from extracted values."""
-    words = val.strip().split()
-    cleaned = [w for w in words if w.lower() not in NOISE_WORDS]
-    return " ".join(cleaned).strip()
+
+# --- STAGE 2: ENTITY & SLOT EXTRACTION ---
+
+# Known entity dictionaries for fast verification
+KNOWN_COLORS = {
+    "black", "blue", "red", "green", "white", "yellow", "pink", "purple", 
+    "orange", "grey", "gray", "dark blue", "sky blue", "navy blue"
+}
+
+KNOWN_DRINKS = {
+    "cold coffee", "coffee", "tea", "chai", "green tea", "latte", 
+    "cappuccino", "juice", "beer", "wine", "mojito", "pepsi", "coke", 
+    "red bull", "lemon soda", "soda", "water"
+}
+
+# Regex Entities
+BIRTHDAY_REGEX = r"(?:mera\s+)?birthday\s+(?:kab\s+aata\s+hai|hai)?\s*([0-9]{1,2}(?:\s+[a-zA-Z]+|\/[0-9]{1,2}|-[0-9]{1,2}))"
+
+PROFESSION_REGEX = r"(?:main|me|i\s+am\s+a|i\'m\s+a)\s+([a-zA-Z0-9\s]+?)\s*(?:me\s+kaam\s+karta\s+hoon|me\s+kaam\s+karti\s+hoon|hoon|hu|engineer|developer|analyst)?$"
+
+def _normalize_title(val: str) -> str:
+    """Proper Title Case capitalization (e.g., 'dark blue' -> 'Dark Blue')."""
+    return " ".join([w.capitalize() for w in val.strip().split()])
+
 
 def extract_ranked_facts(text: str) -> List[Tuple[str, str, str, int]]:
     """
-    Parses incoming user message and returns a LIST of all detected ranked facts.
+    Primary Intent + Entity Classification Extraction Pipeline.
+    Returns: [(fact_key, fact_value, fact_type, importance_score), ...]
     """
     extracted_facts = []
     if not text or not text.strip():
         return extracted_facts
 
     clean_text = text.strip()
+    lower_text = clean_text.lower()
 
-    # CRITICAL CHECK: Ignore questions completely from fact extraction!
-    if _is_question(clean_text):
-        logger.info("[FACT RANKING]: Question detected. Skipping fact extraction for: '%s'", clean_text)
-        return extracted_facts
+    # STEP 1: INTENT CLASSIFICATION
+    if _is_question_intent(clean_text):
+        logger.info("[INTENT CLASSIFIER]: Identified Question/Query. Rejection applied for: '%s'", clean_text)
+        return []
 
     seen_keys = set()
 
-    # --- DIRECT DICTIONARY LOOKUPS FOR HIGH ACCURACY ---
-    lower_text = clean_text.lower()
+    # STEP 2: ENTITY EXTRACTION
 
-    # Color Direct Lookup
-    for color in KNOWN_COLORS:
-        if re.search(rf"\b{color}\b", lower_text) and any(w in lower_text for w in ["color", "colour", "rang", "favourite", "favorite"]):
-            extracted_facts.append(("favorite_color", color.capitalize(), "preference", 90))
-            seen_keys.add("favorite_color")
-            break
+    # A. Birthday Extraction
+    bday_match = re.search(BIRTHDAY_REGEX, clean_text, re.IGNORECASE)
+    if bday_match:
+        val = bday_match.group(1).strip()
+        extracted_facts.append(("birthday", _normalize_title(val), "profile", 100))
+        seen_keys.add("birthday")
 
-    # Drink Direct Lookup
-    for drink in KNOWN_DRINKS:
-        if drink in lower_text and any(w in lower_text for w in ["pasand", "favourite", "favorite", "drink", "peena"]):
-            if "favorite_drink" not in seen_keys:
-                extracted_facts.append(("favorite_drink", drink.title(), "preference", 90))
+    # B. Color Entity Extraction (Requires Context + Entity)
+    has_color_context = any(w in lower_text for w in ["color", "colour", "rang"])
+    if has_color_context:
+        for color in KNOWN_COLORS:
+            if re.search(rf"\b{color}\b", lower_text):
+                extracted_facts.append(("favorite_color", _normalize_title(color), "preference", 90))
+                seen_keys.add("favorite_color")
+                break
+
+    # C. Drink Entity Extraction (Requires Drink Match + Preference Context)
+    has_drink_context = any(w in lower_text for w in ["pasand", "favourite", "favorite", "drink", "peena", "like", "love"])
+    if has_drink_context:
+        for drink in KNOWN_DRINKS:
+            if re.search(rf"\b{drink}\b", lower_text):
+                extracted_facts.append(("favorite_drink", _normalize_title(drink), "preference", 90))
                 seen_keys.add("favorite_drink")
                 break
 
-    # --- REGEX PATTERN MATCHING ---
-    for item in FACT_PATTERNS:
-        pattern, default_key, fact_type, importance = item[0], item[1], item[2], item[3]
+    # D. Profession Entity Extraction
+    if "profession" not in seen_keys:
+        prof_match = re.search(r"(?:main|me)\s+([a-zA-Z0-9\s]+?)\s+(?:me\s+)?(?:kaam|job|work)\s+(?:karta|karti)\s+hoon", clean_text, re.IGNORECASE)
+        if not prof_match:
+            prof_match = re.search(r"(?:main|me|i\s+am\s+a)\s+([a-zA-Z0-9\s]+?)\s+(?:hoon|hu|engineer|developer|analyst)", clean_text, re.IGNORECASE)
 
-        if default_key in seen_keys:
-            continue
+        if prof_match:
+            prof_val = prof_match.group(1).strip()
+            # Stop Words Check for Professions
+            if prof_val.lower() not in {"ek", "ekdam", "a", "an", "kisaan"} and len(prof_val.split()) <= 4:
+                extracted_facts.append(("profession", _normalize_title(prof_val), "profile", 90))
+                seen_keys.add("profession")
 
-        matches = re.finditer(pattern, clean_text, re.IGNORECASE)
-        for match in matches:
-            groups = match.groups()
-            if len(groups) == 1:
-                val = _clean_value(groups[0])
-                val_words = set(val.lower().split())
-
-                # Final validation before appending
-                if val and not (val_words & QUESTION_WORDS):
-                    extracted_facts.append((default_key, val, fact_type, importance))
-                    seen_keys.add(default_key)
-                    break
+    # E. Name Extraction
+    name_match = re.search(r"mera\s+naam\s+([a-zA-Z]+)\s+hai", clean_text, re.IGNORECASE)
+    if name_match:
+        name_val = name_match.group(1).strip()
+        extracted_facts.append(("user_name", _normalize_title(name_val), "profile", 95))
 
     if extracted_facts:
-        logger.info("[FACT RANKING EXTRACTED]: Found %d facts in message.", len(extracted_facts))
+        logger.info("[INTENT ENTITY EXTRACTED]: Found %d facts.", len(extracted_facts))
 
     return extracted_facts
