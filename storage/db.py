@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 # Guarantee database structure initialization on module load
 init_db()
 
-FILLER_WORDS = {"ok", "okk", "hmm", "hmmm", "nhi", "haan", "acha", "achaa", "lol", "haha", "👍", "😂", "???", "123456"}
+# Strictly spam or non-conversational noise filters
+SPAM_PATTERNS = {"???", "123456", "asdfgh", "👍", "😂"}
 
 def _get_connection():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -87,15 +88,15 @@ def get_user_facts(telegram_id: int, min_importance: int = 0) -> Dict[str, str]:
 # ==================== CONVERSATION HISTORY ====================
 
 def save_message(telegram_id: int, role: str, message: str, token_estimate: int = 0, first_name: str = ""):
-    """Saves a single chat turn to persistent storage, filtering out low-value fillers."""
+    """Saves chat turn to persistent storage, filtering out pure spam noise."""
     if not message or not str(message).strip():
         return
 
     clean_msg = str(message).strip().lower()
     
-    # Do not flood history DB with meaningless fillers
-    if clean_msg in FILLER_WORDS or (len(clean_msg) <= 2 and not clean_msg.isalnum()):
-        logger.info("[DB STORAGE]: Filtered filler message from history persistence: '%s'", message)
+    # Drop pure spam/noise patterns while keeping short conversational replies like 'haan', 'nhi', 'ok'
+    if clean_msg in SPAM_PATTERNS:
+        logger.info("[DB STORAGE]: Filtered spam noise from history persistence: '%s'", message)
         return
 
     ensure_user(telegram_id, first_name=first_name)
@@ -110,8 +111,8 @@ def save_message(telegram_id: int, role: str, message: str, token_estimate: int 
     except Exception as e:
         logger.exception("[DB ERROR - save_message]: Failed to save message for user %s", telegram_id)
 
-def get_recent_conversation(telegram_id: int, limit: int = 20) -> List[Dict[str, Any]]:
-    """Retrieves the last N messages formatted for Gemini context."""
+def get_recent_conversation(telegram_id: int, limit: int = 12) -> List[Dict[str, Any]]:
+    """Retrieves the last N messages (capped to 12) formatted for Gemini context window."""
     history = []
     try:
         with _get_connection() as conn:
