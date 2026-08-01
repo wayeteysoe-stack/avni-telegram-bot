@@ -7,6 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 
 from core.config import TELEGRAM_TOKEN
 from core.gemini_service import generate_reply_with_context
+from core.humanizer import humanize_response
 from memory.ranking import extract_ranked_facts
 from memory.context_builder import build_full_prompt_context
 from storage.db import save_fact, save_message, ensure_user
@@ -17,7 +18,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Lightweight Dummy HTTP Health-Check Server for Render ---
 web_app = Flask(__name__)
 
 @web_app.route("/")
@@ -28,7 +28,6 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-# --- Telegram Bot Event Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user:
@@ -52,42 +51,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 1. Fact Extraction
     detected_facts = extract_ranked_facts(user_text)
-    logger.info("Detected Facts: %s", detected_facts)
-    
     for key, val, f_type, score in detected_facts:
         save_fact(user_id, key, val, fact_type=f_type, importance=score, first_name=first_name)
 
-    # 2. Build Context Prompt First (Before saving current turn to DB)
-    contents, dynamic_system_prompt = build_full_prompt_context(user_id, user_text)
+    # 2. Build Context Directive
+    contents, dynamic_system_prompt, active_mood = build_full_prompt_context(user_id, user_text)
 
-    # 3. Save User Message to DB History
+    # 3. Save User Message
     save_message(user_id, "user", user_text, first_name=first_name)
 
-    # 4. Generate AI Reply
+    # 4. Generate Gemini Completion
     raw_response = await generate_reply_with_context(contents, dynamic_system_prompt)
-    response_text = raw_response or "Hmm... kuch technical issue aa gaya."
+    
+    # 5. Post-Process via Humanizer Engine
+    final_response = humanize_response(raw_response or "Hmm... lagta hai net slow hai.", mood=active_mood)
 
-    # 5. Save Model Response & Reply
-    save_message(user_id, "model", response_text, first_name=first_name)
-    await update.message.reply_text(response_text)
+    # 6. Save Model Message & Reply
+    save_message(user_id, "model", final_response, first_name=first_name)
+    await update.message.reply_text(final_response)
 
 def main():
     if not TELEGRAM_TOKEN:
         logger.error("TELEGRAM_TOKEN is missing! Exiting...")
         return
 
-    # Start Flask Server in background thread to satisfy Render Port Check
     threading.Thread(target=run_flask, daemon=True).start()
-
-    logger.info("✅ SQLite DB Engine: READY")
-    logger.info("✅ Gemini Client & Model Manager: READY")
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("🤖 Avni Bot initialized and listening with SQLite Persistence Engine...")
-    app.run_polling(drop_pending_updates=True)  # Drops old pending webhooks/polling requests on startup
+    logger.info("🤖 Avni Bot Enterprise Humanizer Pipeline Engine READY...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
