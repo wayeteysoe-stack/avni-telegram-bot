@@ -50,19 +50,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_user(user_id, first_name=first_name)
 
+    # 1. Fact Extraction
     detected_facts = extract_ranked_facts(user_text)
     logger.info("Detected Facts: %s", detected_facts)
     
     for key, val, f_type, score in detected_facts:
         save_fact(user_id, key, val, fact_type=f_type, importance=score, first_name=first_name)
 
-    save_message(user_id, "user", user_text, first_name=first_name)
-
+    # 2. Build Context Prompt First (Before saving current turn to DB)
     contents, dynamic_system_prompt = build_full_prompt_context(user_id, user_text)
 
+    # 3. Save User Message to DB History
+    save_message(user_id, "user", user_text, first_name=first_name)
+
+    # 4. Generate AI Reply
     raw_response = await generate_reply_with_context(contents, dynamic_system_prompt)
     response_text = raw_response or "Hmm... kuch technical issue aa gaya."
 
+    # 5. Save Model Response & Reply
     save_message(user_id, "model", response_text, first_name=first_name)
     await update.message.reply_text(response_text)
 
