@@ -4,6 +4,7 @@ import os
 import random
 import threading
 import time
+import urllib.request
 from flask import Flask
 from telegram import Update
 from telegram.constants import ChatAction
@@ -32,6 +33,20 @@ def health_check():
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+def keep_alive_ping():
+    """Background Anti-Sleep Pinger: Pings its own Render URL every 5 mins to prevent sleep."""
+    # Render automatically sets RENDER_EXTERNAL_URL in environment
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    target_url = f"{render_url}/health" if render_url else "http://127.0.0.1:10000/health"
+    
+    while True:
+        try:
+            time.sleep(300) # Wait 5 minutes
+            urllib.request.urlopen(target_url)
+            logger.info(f"[KEEP-ALIVE] Successfully pinged {target_url} to block Render sleep.")
+        except Exception as e:
+            logger.warning(f"[KEEP-ALIVE] Ping failed: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -74,7 +89,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 5. Gemini Reply Generation
     raw_response = await generate_reply_with_context(contents, dynamic_system_prompt)
     
-    # 6. Minimal Humanizer Post-Processing (AI Punctuation & Quotes Removal)
+    # 6. Minimal Humanizer Post-Processing
     final_response = humanize_response(raw_response or "Hmm... thoda net issue lag raha hai.", mood=active_mood)
 
     # 7. Typing Delay (1.0s - 2.0s)
@@ -89,8 +104,11 @@ def main():
         logger.error("TELEGRAM_TOKEN is missing! Exiting...")
         return
 
-    # Start Flask Web Engine in Background Thread
+    # 1. Start Flask Web Engine in Background Thread
     threading.Thread(target=run_flask, daemon=True).start()
+
+    # 2. Start Anti-Sleep Pinger Thread
+    threading.Thread(target=keep_alive_ping, daemon=True).start()
 
     # Build Continuous Polling Telegram Application
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -99,11 +117,10 @@ def main():
 
     logger.info("🤖 Avni Bot Persistent Polling Engine READY...")
     
-    # Run Polling without Auto-Stop
+    # Run Polling (stop_signals=() completely ignores Render's sleep signals)
     app.run_polling(
         drop_pending_updates=True,
-        poll_interval=1.0,
-        timeout=30
+        stop_signals=()
     )
 
 if __name__ == "__main__":
