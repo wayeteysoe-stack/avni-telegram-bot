@@ -1,4 +1,7 @@
 import logging
+import os
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -14,6 +17,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- Lightweight Dummy HTTP Health-Check Server for Render ---
+web_app = Flask(__name__)
+
+@web_app.route("/")
+def health_check():
+    return "Avni Bot Engine is Running Healthy!", 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
+
+# --- Telegram Bot Event Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user:
@@ -29,37 +44,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = user.first_name or ""
     user_text = update.message.text.strip()
 
-    # Enhanced Debug Logging
     logger.info("---------- AVNI PIPELINE DEBUG ----------")
     logger.info("User ID: %s | Name: %s", user_id, first_name)
     logger.info("User Text: %s", user_text)
 
-    # 1. Register / Update User in SQLite
     ensure_user(user_id, first_name=first_name)
 
-    # 2. Extract & Save Ranked Memory Facts
     detected_facts = extract_ranked_facts(user_text)
     logger.info("Detected Facts: %s", detected_facts)
     
     for key, val, f_type, score in detected_facts:
         save_fact(user_id, key, val, fact_type=f_type, importance=score, first_name=first_name)
 
-    # 3. Save User Message to SQLite
     save_message(user_id, "user", user_text, first_name=first_name)
 
-    # 4. Build Context from SQLite (Ranked Facts + Conversation History)
     contents, dynamic_system_prompt = build_full_prompt_context(user_id, user_text)
 
-    # 5. Non-blocking Reply Generation
     raw_response = await generate_reply_with_context(contents, dynamic_system_prompt)
-    
-    # Safe None Guard Check
     response_text = raw_response or "Hmm... kuch technical issue aa gaya."
 
-    # 6. Save Model Response to SQLite
     save_message(user_id, "model", response_text, first_name=first_name)
-
-    # 7. Send Response to Telegram
     await update.message.reply_text(response_text)
 
 def main():
@@ -67,7 +71,9 @@ def main():
         logger.error("TELEGRAM_TOKEN is missing! Exiting...")
         return
 
-    # Startup Engine Visibility Logs
+    # Start Flask Server in background thread to satisfy Render Port Check
+    threading.Thread(target=run_flask, daemon=True).start()
+
     logger.info("✅ SQLite DB Engine: READY")
     logger.info("✅ Gemini Client & Model Manager: READY")
 
@@ -76,7 +82,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("🤖 Avni Bot initialized and listening with SQLite Persistence Engine...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)  # Drops old pending webhooks/polling requests on startup
 
 if __name__ == "__main__":
     main()
