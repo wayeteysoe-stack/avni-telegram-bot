@@ -1,8 +1,12 @@
+import asyncio
 import logging
 import os
+import random
 import threading
+import time
 from flask import Flask
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from core.config import TELEGRAM_TOKEN
@@ -21,12 +25,13 @@ logger = logging.getLogger(__name__)
 web_app = Flask(__name__)
 
 @web_app.route("/")
+@web_app.route("/health")
 def health_check():
-    return "Avni Bot Engine is Running Healthy!", 200
+    return "Avni Bot Engine Active", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    web_app.run(host="0.0.0.0", port=port)
+    web_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -49,24 +54,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_user(user_id, first_name=first_name)
 
-    # 1. Fact Extraction
+    # 1. Fact Extractor
     detected_facts = extract_ranked_facts(user_text)
     for key, val, f_type, score in detected_facts:
         save_fact(user_id, key, val, fact_type=f_type, importance=score, first_name=first_name)
 
-    # 2. Build Context Directive
+    # 2. Behavior & Context Builder
     contents, dynamic_system_prompt, active_mood = build_full_prompt_context(user_id, user_text)
 
     # 3. Save User Message
     save_message(user_id, "user", user_text, first_name=first_name)
 
-    # 4. Generate Gemini Completion
+    # 4. Typing Action Simulation
+    try:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    except Exception:
+        pass
+
+    # 5. Gemini Reply Generation
     raw_response = await generate_reply_with_context(contents, dynamic_system_prompt)
     
-    # 5. Post-Process via Humanizer Engine
-    final_response = humanize_response(raw_response or "Hmm... lagta hai net slow hai.", mood=active_mood)
+    # 6. Minimal Humanizer Post-Processing (AI Punctuation & Quotes Removal)
+    final_response = humanize_response(raw_response or "Hmm... thoda net issue lag raha hai.", mood=active_mood)
 
-    # 6. Save Model Message & Reply
+    # 7. Typing Delay (1.0s - 2.0s)
+    await asyncio.sleep(random.uniform(1.0, 2.0))
+
+    # 8. Save & Send Response
     save_message(user_id, "model", final_response, first_name=first_name)
     await update.message.reply_text(final_response)
 
@@ -75,14 +89,22 @@ def main():
         logger.error("TELEGRAM_TOKEN is missing! Exiting...")
         return
 
+    # Start Flask Web Engine in Background Thread
     threading.Thread(target=run_flask, daemon=True).start()
 
+    # Build Continuous Polling Telegram Application
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("🤖 Avni Bot Enterprise Humanizer Pipeline Engine READY...")
-    app.run_polling(drop_pending_updates=True)
+    logger.info("🤖 Avni Bot Persistent Polling Engine READY...")
+    
+    # Run Polling without Auto-Stop
+    app.run_polling(
+        drop_pending_updates=True,
+        poll_interval=1.0,
+        timeout=30
+    )
 
 if __name__ == "__main__":
     main()
